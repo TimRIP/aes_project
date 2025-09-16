@@ -1,0 +1,11 @@
+[project]
+name = "aes"
+version = "0.1.0"
+description = "Tiny example CLI + library"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []  # add deps later if you need them
+authors = [{ name = "Your Name", email = "you@example.com" }]
+
+[project.scripts]
+aes = "aes_pkg.main:main"
