@@ -11,6 +11,9 @@ cd aes_project
 python -m venv .venv
 
 ## Activate environment
+if you got authentication problem, run the following command:
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
+
 .\.venv\bin\activate
 
 .\.venv\Scripts\activate.bat
