@@ -1,6 +1,6 @@
 # aes_pkg/__init__.py
-from .aes import Aes
-__all__ = ["Aes"]
+from .aes import AES
+__all__ = ["aes"]
 
 try:
     from importlib.metadata import version, PackageNotFoundError

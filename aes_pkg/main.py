@@ -1,10 +1,11 @@
-from aes_pkg import Aes
+from aes_pkg import AES
 import argparse
 import os
 
 
 BLOCK_SIZE = 16
 
+#Inserted into aes.py for message padding
 def pkcs7_pad(message: bytes, bytes_per_block: int) -> bytes:
     """Return the message padded to a multiple of bytes_per_block."""
     remainder = len(message) % bytes_per_block
@@ -29,6 +30,7 @@ def read_file_in_blocks(path: str) -> list[bytearray]:
 
 
 def main(argv=None):
+    """
     p = argparse.ArgumentParser()
     p.add_argument("-n", "--name", default="World")
     args = p.parse_args(argv)
@@ -42,6 +44,17 @@ def main(argv=None):
     blocks = read_file_in_blocks(path)
 
     print(f"Read {len(blocks)} blocks from input.jpg")
+    """
+
+    key = b"aaaabbbbccccdddd"
+    aes = AES(key)
+    message = b"Jeg er Francesco"
+
+    ciphertext = aes.encrypt_message(message)
+    print("Ciphertext:", ciphertext)
+
+    plaintext = aes.decrypt_message(ciphertext)
+    print("Plaintext:", plaintext)
 
 if __name__ == "__main__":
     # kør: python -m aes_pkg.main eller aes
