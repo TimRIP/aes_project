@@ -38,6 +38,7 @@ def read_file(path: str) -> bytes:
 def main(argv=None):
     """
     WE NEED TO CHANGE THIS So the arguments will refer to input Key and input file
+    Also if it's a 128 and if it's more than 10 rounds
     p = argparse.ArgumentParser()
     p.add_argument("-n", "--name", default="World")
     args = p.parse_args(argv)

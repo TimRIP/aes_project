@@ -1,5 +1,6 @@
 #Implementation of AES-128
 from typing import List
+from unittest import case
 
 #Algorithm Steps
 """
@@ -98,26 +99,29 @@ RCON = [ [0x01,0x00,0x00,0x00],
     [0x1B,0x00,0x00,0x00],
     [0x36,0x00,0x00,0x00]]
 
-# multiplication in GF(2^8) is modulo an irreducible polynomial x^8 + x^4 + x^3 + x + 1 (0x11b)
+MIX_COL_MATRIX = [
+    [0x02, 0x03, 0x01, 0x01],
+    [0x01, 0x02, 0x03, 0x01],
+    [0x01, 0x01, 0x02, 0x03],
+    [0x03, 0x01, 0x01, 0x02]
+]
+
+# we rotate 1 bit to the left then look at first bit 
+# if it is 1 we need to xor with 0x1B (which is the modolus x^8 + x^4 + x^3 + x + 1)
+# otherwise we do nothing (ie xor with 0x00)
 def Xtime(a: int) -> int:
-    a <<= 1  # shit left by 1 bit
-    if a & 0x100:  # is shift value overflowed 8 bits
-        a ^= 0x11b
-    return a & 0xff
+    return ( (a << 1) & 0xFF ) ^ (0x1B if (a & 0x80) else 0x00)
 
 def GF_mul(a: int, b: int) -> int :
-    """" multiplication byte a *b in GF(2^8) with modolus x^8 + x^4 + x^3 + x + 1 (0x11b) """
-    return_result = 0
-    for  _ in range(8): #8 bits in b
-      if b & 1:  # if lowest bit of b is set, add 'a' to result
-
-        return_result ^= a  # addition in GF(2^8) = XOR
-        a = Xtime(a)        # mulitply 'a' by x
-        b >>= 1             #shit b right to process next bit
-
-    return_result
-     
-    
+    if (b == 1):
+        return a
+    elif (b == 2):
+        return Xtime(a)
+    elif (b == 3):
+        return Xtime(a) ^ a # multiply by 3 is (2·x) ⊕ x
+    else:
+        assert False, "Unsupported multiplication in GF(2^8)"
+        return 0    
 
 class AES:
 
@@ -126,10 +130,7 @@ class AES:
         if len(key) != BLOCK_SIZE: ## which is 16 bytes for AES-128
             raise ValueError("Key must be 16 bytes (128 bits) long.")
         self.key = key
-        self.round_key = self.key_expansion(key) #list of 11 round keys
-        #Compute first round key
-        #Compute the 11 round keys
-        self.round_keys = self.key_expansion(key)
+        self.round_keys = self.key_expansion(key) #list of 11 round keys
 
     #ENCRYPT
     def encrypt_message(self, message:bytes) -> bytes:
@@ -156,6 +157,16 @@ class AES:
         #Initial AddRoundKey
         self.add_round_key(state, self.round_keys[0])
 
+        for round in range(1, 10):
+            self.sub_bytes(state)
+            self.shift_rows(state)
+            self.mix_columns(state)
+            self.add_round_key(state, self.round_keys[round])
+        #Final round (no MixColumns)
+        self.sub_bytes(state)
+        self.shift_rows(state)
+        self.add_round_key(state, self.round_keys[10])
+        #state back to bytes
         out = self.state_to_bytes(state)
 
         return out
@@ -184,45 +195,52 @@ class AES:
 
     #SubBytes Operation (in-place)
     def sub_bytes(self, state):
-        for r in range(4):  # for each row
-            for c in range(4):  # for each column
+        for r in range(4):  #row
+            for c in range(4):  #column
                 byte = state[r][c]
                 state[r][c] = S_BOX[byte]  # substitute byte using S-Box
         return state
     
-    #ShiftRows Operation (in-place)
-    def shift_rows(self, state: List[List[int]]):
-        # row r is rotated left by r bytes
-        for r in range(1, 4):  # for rows 1 to 3
-            state[r] = state[r][r:] + state[r][:r]  # rotate left by r positions
-        return state
-    
-    #MixColumns Operation (in-place)
-    def mix_columns(self, state):
-        for c in range(4):  # for each column
-            a0, a1, a2, a3 = state[0][c], state[1][c], state[2][c], state[3][c]
-    #gf_mul(x, 2) = multiply by 2 in GF(2^8) (done using xtime).
-   #gf_mul(x, 3) = multiply by 3 in GF(2^8), which is just (2·x) ⊕ x
-            state[0][c] = GF_mul(a, 2) ^ GF_mul(b, 3) ^ d ^ e
-            state[1][c] = a ^ GF_mul(b, 2) ^ GF_mul(d, 3) ^ e
-            state[2][c] = a ^ b ^ GF_mul(d, 2) ^ GF_mul(e, 3)
-            state[3][c] = GF_mul(a, 3) ^ b ^ d ^ GF_mul(e, 2)
+    def shift_rows(self, state):
+        # Row 0: unchanged
+
+        # Row 1: rotate left by 1
+        a, b, c, d = state[1]
+        state[1] = [b, c, d, a]
+
+        # Row 2: rotate left by 2
+        a, b, c, d = state[2]
+        state[2] = [c, d, a, b]
+
+        # Row 3: rotate left by 3 (== right by 1)
+        a, b, c, d = state[3]
+        state[3] = [d, a, b, c]
 
         return state
     
+
+    def mix_columns(self, state):
+
+        for c in range(4):  # for each column
+            a0, a1, a2, a3 = state[0][c], state[1][c], state[2][c], state[3][c]
+            state[0][c] = GF_mul(a0, MIX_COL_MATRIX[0][0]) ^ GF_mul(a1, MIX_COL_MATRIX[0][1]) ^ GF_mul(a2, MIX_COL_MATRIX[0][2]) ^ GF_mul(a3, MIX_COL_MATRIX[0][3])
+            state[1][c] = GF_mul(a0, MIX_COL_MATRIX[1][0]) ^ GF_mul(a1, MIX_COL_MATRIX[1][1]) ^ GF_mul(a2, MIX_COL_MATRIX[1][2]) ^ GF_mul(a3, MIX_COL_MATRIX[1][3])
+            state[2][c] = GF_mul(a0, MIX_COL_MATRIX[2][0]) ^ GF_mul(a1, MIX_COL_MATRIX[2][1]) ^ GF_mul(a2, MIX_COL_MATRIX[2][2]) ^ GF_mul(a3, MIX_COL_MATRIX[2][3])
+            state[3][c] = GF_mul(a0, MIX_COL_MATRIX[3][0]) ^ GF_mul(a1, MIX_COL_MATRIX[3][1]) ^ GF_mul(a2, MIX_COL_MATRIX[3][2]) ^ GF_mul(a3, MIX_COL_MATRIX[3][3])
+
+        return state
+  
     #AddRoundKey Operation (in-place)
     def add_round_key(self, state, round_key):
-        # round_key is 16 bytes → applied column by column
-        #XOR operation between state and key
-        for c in range(4):  # for each column
-            for r in range(4):  # for each row
+        # round_key is 16 bytes → applied byte by byte
+
+        #XOR operation between state and round_key
+        for c in range(4):  # column
+            for r in range(4):  # row
                 state[r][c] ^= round_key[c * 4 + r]
         return state
 
-    #KeyExpansion Operation (in-place)
-    def key_expansion(self, key):
-        #Round keys are computed once and used for all blocks
-
+    def key_expansion(self, key: bytes):
         """
         1) Initialize the first 4 words (W[0..3]) directly from the key
         2) For words W[i] where i >= 4:
@@ -235,13 +253,39 @@ class AES:
         3) Repeat until 44 words are generated (11 round keys × 4 words each)
         4) Each round key is 4×4 bytes, used in AddRoundKey for encryption and decryption.
         """
-        return 0
-    
-    def rotate_word (self, word):
-        pass
+        # 44 words, each word = 4 bytes (list[int])
+        words = []
+        # W[0..3] from the key (column-major: bytes 0..3, 4..7, 8..11, 12..15)
+        for i in range(4):
+            words.append([key[4*i + 0], key[4*i + 1], key[4*i + 2], key[4*i + 3]])
+
+        # Expand to W[4..43]
+        for i in range(4, 44):
+            temp = words[i - 1][:]
+            if i % 4 == 0:
+                temp = self.rotate_word(temp)          # rotate bytes left by 1
+                temp = self.sub_word_bytes(temp)       # S-Box on each byte
+                temp[0] ^= RCON[(i // 4) - 1][0]          # XOR first byte with round constant
+            # W[i] = W[i-4] XOR temp
+            words.append([(words[i - 4][j] ^ temp[j]) & 0xFF for j in range(4)])
+
+        # Pack 44 words into 11 round keys (each 4 words = 16 bytes), column by column
+        round_keys = []
+        for r in range(11):
+            rk_bytes = []
+            for c in range(4):
+                rk_bytes.extend(words[4*r + c])  # append the whole column (rows 0..3)
+            round_keys.append(bytes(rk_bytes))   # bytes or list[int] both work with your add_round_key
+
+        return round_keys  # list of 11 items; each item is 16 bytes (flat, column-major)
+
+    def rotate_word(self, word):
+        # word: [b0, b1, b2, b3]  ->  [b1, b2, b3, b0]
+        return word[1:] + word[:1]
 
     def sub_word_bytes(self, word):
-        pass
+        # Apply S-Box to each byte
+        return [S_BOX[b] for b in word]
     
     #Helpers
 
