@@ -106,6 +106,13 @@ MIX_COL_MATRIX = [
     [0x03, 0x01, 0x01, 0x02]
 ]
 
+MIX_COL_MATRIX_INV = [
+    [0x0e, 0x0b, 0x0d, 0x09],
+    [0x09, 0x0e, 0x0b, 0x0d],
+    [0x0d, 0x09, 0x0e, 0x0b],
+    [0x0b, 0x0d, 0x09, 0x0e]
+]
+
 # we rotate 1 bit to the left then look at first bit 
 # if it is 1 we need to xor with 0x1B (which is the modolus x^8 + x^4 + x^3 + x + 1)
 # otherwise we do nothing (ie xor with 0x00)
@@ -119,6 +126,15 @@ def GF_mul(a: int, b: int) -> int :
         return Xtime(a)
     elif (b == 3):
         return Xtime(a) ^ a # multiply by 3 is (2·x) ⊕ x
+    elif (b == 9):
+        return Xtime(Xtime(Xtime(a))) ^ a  # (2·(2·(2·x))) ⊕ x
+    elif (b == 11):
+        return Xtime(Xtime(Xtime(a))) ^ Xtime(a) ^ a  # (2·(2·(2·x))) ⊕ (2·x) ⊕ x
+    elif (b == 13):
+        return Xtime(Xtime(Xtime(a))) ^ Xtime(Xtime(a)) ^ a  # (2·(2·(2·x))) ⊕ (2·(2·x)) ⊕ x
+    elif (b == 14):
+        return Xtime(Xtime(Xtime(a))) ^ Xtime(Xtime(a)) ^ Xtime(a)  # (2·(2·(2·x))) ⊕ (2·(2·x)) ⊕ (2·x)
+    
     else:
         assert False, "Unsupported multiplication in GF(2^8)"
         return 0    
@@ -145,8 +161,12 @@ class AES:
     def decrypt_message(self, ciphertext:bytes) -> bytes:
         #Iterates through blocks to encrypt each one of them
         #Removes the padding
-        return 0
-    
+
+        out = bytearray()
+        for i in range(0, len(ciphertext), BLOCK_SIZE):
+            out.extend(self.decrypt_block(ciphertext[i:i+BLOCK_SIZE]))
+        
+        return self.unpad_message(bytes(out))
     #Helpers
 
     def encrypt_block(self, block:bytes) -> bytes:
@@ -172,7 +192,25 @@ class AES:
         return out
 
     def decrypt_block(self, block:bytes) -> bytes:
-        return 0
+        state = self.bytes_to_state(block)
+
+        #Initial AddRoundKey with the last round key
+        self.add_round_key(state, self.round_keys[10])
+
+        for round in range(9, 0, -1):
+            self.inv_shift_rows(state)
+            self.inv_sub_bytes(state)
+            self.add_round_key(state, self.round_keys[round])
+            self.inv_mix_columns(state)
+        
+        #Final round (no InvMixColumns)
+        self.inv_shift_rows(state)
+        self.inv_sub_bytes(state)
+        self.add_round_key(state, self.round_keys[0])
+
+        out = self.state_to_bytes(state)
+
+        return out
     
     #Necessitates of final variable defining the block size
     #Use pcks7_pad in the naive approach processing all the blocks at once
@@ -330,19 +368,41 @@ class AES:
         # Remove padding bytes and return
         return message[:-padding_length]
 
-    # SubBytes inverse (in-place)
+
     def inv_sub_bytes(self, state):
         # Apply inverse S-box on each byte of the state
+        for r in range(4):
+            for c in range(4):
+                state[r][c] = INV_S_Box[state[r][c]]
         return state
 
-    # ShiftRows inverse (in-place)
     def inv_shift_rows(self, state):
         # Rotate rows of the state in the opposite direction
+        # Row 0: unchanged
+
+        # Row 1: rotate right by 1
+        a, b, c, d = state[1]
+        state[1] = [d, a, b, c]
+
+        # Row 2: rotate right by 2 (same as left by 2)
+        a, b, c, d = state[2]
+        state[2] = [c, d, a, b]
+
+        # Row 3: rotate right by 3 (== left by 1)
+        a, b, c, d = state[3]
+        state[3] = [b, c, d, a]
+
         return state
 
     # MixColumns inverse (in-place)
     def inv_mix_columns(self, state):
-        # Apply inverse MixColumns transformation
+        for c in range(4):  # for each column
+            a0, a1, a2, a3 = state[0][c], state[1][c], state[2][c], state[3][c]
+            state[0][c] = GF_mul(a0, MIX_COL_MATRIX_INV[0][0]) ^ GF_mul(a1, MIX_COL_MATRIX_INV[0][1]) ^ GF_mul(a2, MIX_COL_MATRIX_INV[0][2]) ^ GF_mul(a3, MIX_COL_MATRIX_INV[0][3])
+            state[1][c] = GF_mul(a0, MIX_COL_MATRIX_INV[1][0]) ^ GF_mul(a1, MIX_COL_MATRIX_INV[1][1]) ^ GF_mul(a2, MIX_COL_MATRIX_INV[1][2]) ^ GF_mul(a3, MIX_COL_MATRIX_INV[1][3])
+            state[2][c] = GF_mul(a0, MIX_COL_MATRIX_INV[2][0]) ^ GF_mul(a1, MIX_COL_MATRIX_INV[2][1]) ^ GF_mul(a2, MIX_COL_MATRIX_INV[2][2]) ^ GF_mul(a3, MIX_COL_MATRIX_INV[2][3])
+            state[3][c] = GF_mul(a0, MIX_COL_MATRIX_INV[3][0]) ^ GF_mul(a1, MIX_COL_MATRIX_INV[3][1]) ^ GF_mul(a2, MIX_COL_MATRIX_INV[3][2]) ^ GF_mul(a3, MIX_COL_MATRIX_INV[3][3])
+
         return state
 
     

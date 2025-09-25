@@ -62,6 +62,9 @@ def main(argv=None):
     plaintext = aes.decrypt_message(ciphertext)
     print("Plaintext:", plaintext)
 
+    with open("decrypted.jpg", "wb") as f:
+        f.write(plaintext)
+
 if __name__ == "__main__":
     # kør: python -m aes_pkg.main eller aes
     main()
