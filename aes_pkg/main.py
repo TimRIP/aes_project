@@ -28,30 +28,35 @@ def read_file_in_blocks(path: str) -> list[bytearray]:
 
     return blocks
 
+def read_file(path: str) -> bytes:
+    "opens the nice image of our Team and returns its content"
+    with open(path, "rb") as f:
+        data = f.read()
+    return data
+
 
 def main(argv=None):
     """
+    WE NEED TO CHANGE THIS So the arguments will refer to input Key and input file
     p = argparse.ArgumentParser()
     p.add_argument("-n", "--name", default="World")
     args = p.parse_args(argv)
     print(f"Hello, {args.name}!")
-    
-    greeter = Aes("yahhh this works")
-    print(greeter.respond())
-
+    """
     script_dir = os.path.dirname(os.path.abspath(__file__))
     path = os.path.join(script_dir, "input.jpg")
-    blocks = read_file_in_blocks(path)
-
-    print(f"Read {len(blocks)} blocks from input.jpg")
-    """
+    message = read_file(path)
 
     key = b"aaaabbbbccccdddd"
     aes = AES(key)
-    message = b"Jeg er Francesco"
+    #message = b"Jeg er Francesco ULLA"
 
     ciphertext = aes.encrypt_message(message)
     print("Ciphertext:", ciphertext)
+
+    # we write the ciphertext to a file
+    with open("ciphertext.enc", "wb") as f:
+        f.write(ciphertext)
 
     plaintext = aes.decrypt_message(ciphertext)
     print("Plaintext:", plaintext)

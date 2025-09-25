@@ -50,15 +50,17 @@ class AES:
     #Constructor only assigns the key and saves the computes the first round key
     def __init__(self, key: bytes):
         self.key = key
-        #Compute first round key
+        #Compute the 11 round keys
+        self.round_keys = self.key_expansion(key)
 
     #ENCRYPT
     def encrypt_message(self, message:bytes) -> bytes:
         #Adds padding through pad_message
-
-        #Iterates through blocks to encrypt each one of them
-        #According to the algorithm steps
-        return 1
+        data = self.pad_message(bytes(message))
+        out = bytearray()
+        for i in range(0, len(data), BLOCK_SIZE):
+            out.extend(self.encrypt_block(data[i:i+BLOCK_SIZE]))
+        return bytes(out)
     
     #DECRYPT
     def decrypt_message(self, ciphertext:bytes) -> bytes:
@@ -69,8 +71,17 @@ class AES:
     #Helpers
 
     def encrypt_block(self, block:bytes) -> bytes:
-        return 0
-    
+
+        #block into a 4x4
+        state = self.bytes_to_state(block)
+
+        #Initial AddRoundKey
+        self.add_round_key(state, self.round_keys[0])
+
+        out = self.state_to_bytes(state)
+
+        return out
+
     def decrypt_block(self, block:bytes) -> bytes:
         return 0
     
